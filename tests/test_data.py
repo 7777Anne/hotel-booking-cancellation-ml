@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 import pytest
 
@@ -5,6 +7,7 @@ from src.data import (
     EXCLUDED_COLUMNS,
     build_audit_report,
     create_modelling_table,
+    save_audit_report,
     validate_schema,
 )
 
@@ -56,3 +59,32 @@ def test_audit_report_calculates_cancellation_rate() -> None:
     report = build_audit_report(sample_frame())
     assert report["rows"] == 2
     assert report["cancellation_rate"] == pytest.approx(0.5)
+
+
+def test_validate_schema_rejects_null_targets() -> None:
+    frame = sample_frame()
+    frame.loc[0, "is_canceled"] = float("nan")
+    with pytest.raises(ValueError, match="must not contain missing"):
+        validate_schema(frame)
+
+
+def test_validate_schema_rejects_nonbinary_target() -> None:
+    frame = sample_frame()
+    frame.loc[0, "is_canceled"] = 2
+    with pytest.raises(ValueError, match="must be binary"):
+        validate_schema(frame)
+
+
+def test_create_modelling_table_does_not_mutate_source() -> None:
+    source = sample_frame()
+    original = source.copy(deep=True)
+    create_modelling_table(source)
+    pd.testing.assert_frame_equal(source, original)
+
+
+def test_save_audit_report_writes_json(tmp_path) -> None:
+    report = build_audit_report(sample_frame())
+    path = tmp_path / "nested" / "audit.json"
+    result = save_audit_report(report, path)
+    assert result == path
+    assert json.loads(path.read_text(encoding="utf-8")) == report
