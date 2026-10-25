@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -63,7 +64,11 @@ def validate_schema(frame: pd.DataFrame) -> None:
     if missing:
         raise ValueError(f"Missing required columns: {sorted(missing)}")
 
-    target_values = set(frame[TARGET].dropna().unique())
+    if frame.empty:
+        raise ValueError("Cannot validate an empty dataset.")
+    if frame[TARGET].isna().any():
+        raise ValueError(f"{TARGET} must not contain missing values.")
+    target_values = set(frame[TARGET].unique())
     if not target_values <= {0, 1}:
         raise ValueError(
             f"{TARGET} must be binary, but found values: {sorted(target_values)}"
@@ -101,6 +106,17 @@ def build_audit_report(frame: pd.DataFrame) -> dict[str, object]:
     }
 
 
+def save_audit_report(report: dict[str, object], path: str | Path) -> Path:
+    """Persist the aggregated audit as readable JSON without exporting raw bookings."""
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return output_path
+
+
 def print_audit(report: dict[str, object]) -> None:
     """Print a readable Day-1 audit."""
     print("Hotel Booking Demand - Data Audit")
@@ -120,6 +136,9 @@ def parse_args() -> argparse.Namespace:
         default="data/raw/hotel_bookings.csv",
         help="Path to hotel_bookings.csv",
     )
+    parser.add_argument(
+        "--output", help="Optional path for the JSON audit report"
+    )
     return parser.parse_args()
 
 
@@ -128,6 +147,9 @@ def main() -> None:
     frame = load_data(args.input)
     report = build_audit_report(frame)
     print_audit(report)
+    if args.output:
+        output_path = save_audit_report(report, args.output)
+        print(f"Audit JSON written to: {output_path}")
 
     modelling_table = create_modelling_table(frame)
     print(f"Model-ready columns after exclusions: {modelling_table.shape[1]}")
