@@ -50,7 +50,11 @@ def load_data(path: str | Path) -> pd.DataFrame:
             "Download hotel_bookings.csv and place it in data/raw/."
         )
 
-    frame = pd.read_csv(csv_path)\n    if TARGET in frame and frame[TARGET].dtype == object:\n        labels = frame[TARGET].astype("string").str.strip().str.lower()\n        if labels.dropna().isin(["yes", "no"]).all():\n            frame[TARGET] = labels.map({"yes": 1, "no": 0}).astype("Int64")
+    frame = pd.read_csv(csv_path)
+    if TARGET in frame and frame[TARGET].dtype == object:
+        labels = frame[TARGET].astype("string").str.strip().str.lower()
+        if labels.dropna().isin(["yes", "no"]).all():
+            frame[TARGET] = labels.map({"yes": 1, "no": 0}).astype("Int64")
     if frame.empty:
         raise ValueError("The dataset is empty.")
 
@@ -63,7 +67,11 @@ def validate_schema(frame: pd.DataFrame) -> None:
     if missing:
         raise ValueError(f"Missing required columns: {sorted(missing)}")
 
-    if frame.empty:\n        raise ValueError("Empty dataset")\n    if frame[TARGET].isna().any():\n        raise ValueError("Missing cancellation labels")\n    target_values = set(frame[TARGET].unique())
+    if frame.empty:
+        raise ValueError("Empty dataset")
+    if frame[TARGET].isna().any():
+        raise ValueError("Missing cancellation labels")
+    target_values = set(frame[TARGET].unique())
     if not target_values <= {0, 1}:
         raise ValueError(
             f"{TARGET} must be binary, but found values: {sorted(target_values)}"
