@@ -1,125 +1,61 @@
-# Hotel Booking Cancellation ML
+# Hotel Booking Cancellation Risk — reproducible ML portfolio
 
-A leakage-aware machine learning project for predicting hotel booking cancellations and translating model scores into actionable risk bands.
+**Status:** Logistic Regression baseline + tests + FastAPI demo implemented. XGBoost, SHAP, cloud deployment, monitoring, and business-cost calibration remain future work; this is **not** a production hotel decision system.
 
-## Why this project
+## Problem
+Predict whether a reservation will be cancelled using a conservative subset of fields potentially known around the original booking. Dataset: [Hotel Booking Demand](https://doi.org/10.1016/j.dib.2018.11.126), 119,390 rows / 32 columns. The supplied public CSV uses `yes` and `no` cancellation labels, normalized to 1 and 0 on loading.
 
-Hotel cancellations affect inventory planning, pricing, staffing, and revenue. This project asks:
-
-> Can we estimate cancellation risk using information available at booking time?
-
-The first milestone is a reproducible data-quality and exploratory-analysis pipeline. Later milestones add a baseline model, XGBoost, threshold analysis, SHAP explanations, a FastAPI service, tests, Docker, and optional Google Cloud deployment.
-
-## Dataset
-
-Use the public **Hotel Booking Demand** dataset originally described by Nuno Antonio, Ana de Almeida, and Luis Nunes.
-
-- Paper: https://doi.org/10.1016/j.dib.2018.11.126
-- Kaggle mirror: https://www.kaggle.com/datasets/jessemostipak/hotel-booking-demand
-- Expected file: `hotel_bookings.csv`
-- Expected shape: approximately 119,390 rows and 32 columns
-- Target: `is_canceled`
-
-Download the CSV and save it locally as:
-
-```text
-data/raw/hotel_bookings.csv
-```
-
-Raw data is intentionally excluded from Git.
-
-## Leakage policy
-
-The prediction point is immediately after the original booking is created. Columns that reveal the final outcome are excluded:
-
-- `reservation_status`
-- `reservation_status_date`
-
-The starter pipeline also excludes fields that may be updated after booking:
-
-- `assigned_room_type`
-- `booking_changes`
-- `days_in_waiting_list`
-
-This policy will be reviewed and documented before modelling.
-
-## Repository structure
-
-```text
-.
-├── data/
-│   └── README.md
-├── src/
-│   ├── __init__.py
-│   └── data.py
-├── tests/
-│   └── test_data.py
-├── .gitignore
-├── requirements.txt
-└── README.md
-```
-
-## Quick start
-
-Create and activate a virtual environment:
-
-```bash
-python -m venv .venv
-```
-
-Windows PowerShell:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-Install dependencies:
-
+## Run
 ```bash
 python -m pip install -r requirements.txt
-```
-
-After downloading the dataset, run the Day-1 audit:
-
-```bash
+# Download hotel_bookings.csv from https://www.kaggle.com/datasets/jessemostipak/hotel-booking-demand
+mkdir -p data/raw
+# Place the downloaded CSV at data/raw/hotel_bookings.csv
 python -m src.data --input data/raw/hotel_bookings.csv
+python -m src.train --input data/raw/hotel_bookings.csv --output-dir artifacts
+python -m pytest -q
+uvicorn src.api:app --reload
+```
+Visit `http://localhost:8000/docs` to test `POST /predict`. The API reads `artifacts/baseline.joblib` and the validation-selected threshold in `artifacts/metrics.json`. The model must be trained first. Only load trusted joblib files.
+
+### Example prediction request
+```json
+{
+  "hotel": "City Hotel", "lead_time": 90,
+  "arrival_date_month": "June", "arrival_date_day_of_month": 12,
+  "stays_in_weekend_nights": 1, "stays_in_week_nights": 3,
+  "adults": 2, "children": 0, "babies": 0,
+  "market_segment": "Online TA", "customer_type": "Transient"
+}
 ```
 
-Run tests:
-
+### Docker (after training locally)
 ```bash
-pytest
+docker build -t hotel-risk .
+docker run --rm -p 8000:8000 -v "$PWD/artifacts:/app/artifacts:ro" hotel-risk
 ```
+Mounting a trusted, locally trained model is required; model artifacts and the dataset are not committed.
 
-## Three-day MVP plan
+## Locally reproduced Logistic Regression results (25 October 2026)
+Data: 119,390 rows; **31,994 identical rows** observed (not automatically removed: separate bookings may share recorded values). Grouped by scheduled arrival date into train 67,692, validation 22,896, test 28,802. Validation F1 selected a threshold of **0.40**. Held-out test: **ROC-AUC 0.7066, PR-AUC 0.6410, precision 0.4799, recall 0.8756, F1 0.6200**. Test cancellation prevalence: 40.79%. These numbers were obtained locally from the provided dataset and the same baseline training logic; reproduce by running the command above.
 
-### Day 1 - Data and baseline readiness
+## Leakage and evaluation cautions
+- `reservation_status` and `reservation_status_date` reveal outcomes; never model them.
+- `assigned_room_type`, `booking_changes`, `days_in_waiting_list` are excluded.
+- Original booking creation timestamps are unavailable. **Arrival-date chronology is an imperfect proxy, not true booking-time backtesting.** Some records arriving later may have been booked earlier.
+- Training-only preprocessing avoids preprocessing leakage. Validation selects the threshold; test data are not used for tuning.
+- Feature availability, probability calibration, subgroup behavior, intervention costs, drift, and external validation must be checked before any real operational use.
+- Historical data are from 2015–2017 and may not represent modern hotel behavior.
 
-- Validate schema, target, duplicates, and missing values
-- Document the prediction point and leakage exclusions
-- Produce a compact data-quality report
-- Prepare a reproducible modelling table
+## Files
+- `src/data.py`: loading, normalization, schema checks, data audit
+- `src/train.py`: train/validation/test split, preprocessing, baseline, metrics, saved model
+- `src/api.py`: input-validated prediction API and health endpoint
+- `tests/`: data, model and API checks
+- `docs/BASELINE.md`: methodology and caveats
+- `Dockerfile`: local demo container
 
-### Day 2 - Modelling and explainability
+## Next engineering milestones
+XGBoost comparison, SHAP explanations, business-cost threshold analysis, stronger temporal evaluation with actual booking event timestamps, drift monitoring, and deployment.
 
-- Train Logistic Regression baseline
-- Train XGBoost candidate
-- Compare Precision, Recall, F1, ROC-AUC, and PR-AUC
-- Perform threshold analysis
-- Add SHAP explanations
-
-### Day 3 - Productization
-
-- Expose predictions through FastAPI
-- Add input validation and logging
-- Add unit tests
-- Package with Docker
-- Document sample requests and limitations
-
-## Responsible use
-
-This is a portfolio and learning project, not a live hotel decision system. Data is historical and anonymized. Model outputs must not be used for automated customer treatment without validation, monitoring, fairness analysis, and human oversight.
-
-## Citation
-
-Antonio, N., Almeida, A., & Nunes, L. (2019). Hotel booking demand datasets. *Data in Brief, 22*, 41-49. https://doi.org/10.1016/j.dib.2018.11.126
+Citation: Antonio, Almeida & Nunes (2019), *Hotel booking demand datasets*, Data in Brief. DOI: 10.1016/j.dib.2018.11.126.
