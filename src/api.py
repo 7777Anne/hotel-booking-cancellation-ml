@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -33,7 +34,10 @@ class Booking(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model
+    global model, THRESHOLD
+    metrics_path = MODEL_PATH.with_name("metrics.json")
+    if "DECISION_THRESHOLD" not in os.environ and metrics_path.exists():
+        THRESHOLD = float(json.loads(metrics_path.read_text(encoding="utf-8"))["threshold_selected_on_validation"])
     if MODEL_PATH.exists():
         model = joblib.load(MODEL_PATH)  # Never load untrusted serialized models.
     yield
