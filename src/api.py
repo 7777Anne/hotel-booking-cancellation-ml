@@ -64,3 +64,11 @@ def predict(booking: Booking):
         "threshold": THRESHOLD,
         "disclaimer": "Historical portfolio model; not validated for operational decisions",
     }
+
+
+@app.get("/ready")
+def readiness():
+    """Unlike liveness, readiness fails until a model is loaded."""
+    if model is None:
+        raise HTTPException(status_code=503, detail="No trained model has been loaded")
+    return {"status": "ready", "model_path": MODEL_PATH.name}

@@ -3,7 +3,7 @@
 **Status:** Logistic Regression baseline + tests + FastAPI demo implemented. XGBoost, SHAP, cloud deployment, monitoring, and business-cost calibration remain future work; this is **not** a production hotel decision system.
 
 ## Problem
-Predict whether a reservation will be cancelled using a conservative subset of fields potentially known around the original booking. Dataset: [Hotel Booking Demand](https://doi.org/10.1016/j.dib.2018.11.126), 119,390 rows / 32 columns. The supplied public CSV uses `yes` and `no` cancellation labels, normalized to 1 and 0 on loading.
+Predict whether a reservation will be cancelled using a conservative subset of fields potentially known around the original booking. Dataset: [Hotel Booking Demand](https://doi.org/10.1016/j.dib.2018.11.126), 119,390 rows / 32 columns. The loader supports both numeric 0/1 targets and yes/no cancellation labels; source files must be schema-validated before training.
 
 ## Run
 ```bash
@@ -11,7 +11,7 @@ python -m pip install -r requirements.txt
 # Download hotel_bookings.csv from https://www.kaggle.com/datasets/jessemostipak/hotel-booking-demand
 mkdir -p data/raw
 # Place the downloaded CSV at data/raw/hotel_bookings.csv
-python -m src.data --input data/raw/hotel_bookings.csv
+python -m src.data --input data/raw/hotel_bookings.csv --output artifacts/data_audit.json
 python -m src.train --input data/raw/hotel_bookings.csv --output-dir artifacts
 python -m pytest -q
 uvicorn src.api:app --reload
@@ -50,7 +50,7 @@ Data: 119,390 rows; **31,994 identical rows** observed (not automatically remove
 ## Files
 - `src/data.py`: loading, normalization, schema checks, data audit
 - `src/train.py`: train/validation/test split, preprocessing, baseline, metrics, saved model
-- `src/api.py`: input-validated prediction API and health endpoint
+- `src/api.py`: input-validated prediction API and liveness/readiness endpoints
 - `tests/`: data, model and API checks
 - `docs/BASELINE.md`: methodology and caveats
 - `Dockerfile`: local demo container
@@ -59,3 +59,8 @@ Data: 119,390 rows; **31,994 identical rows** observed (not automatically remove
 XGBoost comparison, SHAP explanations, business-cost threshold analysis, stronger temporal evaluation with actual booking event timestamps, drift monitoring, and deployment.
 
 Citation: Antonio, Almeida & Nunes (2019), *Hotel booking demand datasets*, Data in Brief. DOI: 10.1016/j.dib.2018.11.126.
+
+## Code review branch additions
+- `GET /health`: liveness, reports whether the model is loaded. `GET /ready`: readiness, returns HTTP 503 until training artifacts are loaded.
+- `python -m src.data --output artifacts/data_audit.json`: saves a JSON source-quality summary without publishing individual booking records.
+- See [review methodology](docs/REVIEW_NOTES.md). All performance values above are *previously reported* and should be independently reproduced on the original public CSV.

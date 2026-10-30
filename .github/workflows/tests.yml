@@ -1,26 +1,17 @@
 name: tests
-
 on:
   push:
-    branches: [main]
+    branches: [main, review/hotel-quality-evaluation]
   pull_request:
     branches: [main]
-
 jobs:
   pytest:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
-
-      - name: Run tests
-        run: pytest -q
+      - run: python -m pip install -r requirements.txt
+      - run: pytest -q

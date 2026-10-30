@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -109,6 +110,14 @@ def build_audit_report(frame: pd.DataFrame) -> dict[str, object]:
     }
 
 
+def save_audit_report(report: dict[str, object], path: str | Path) -> Path:
+    """Save aggregate data-quality observations without exporting raw reservations."""
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return destination
+
+
 def print_audit(report: dict[str, object]) -> None:
     """Print a readable Day-1 audit."""
     print("Hotel Booking Demand - Data Audit")
@@ -128,6 +137,7 @@ def parse_args() -> argparse.Namespace:
         default="data/raw/hotel_bookings.csv",
         help="Path to hotel_bookings.csv",
     )
+    parser.add_argument('--output', help='Optional path for JSON data-quality report')
     return parser.parse_args()
 
 
@@ -136,6 +146,8 @@ def main() -> None:
     frame = load_data(args.input)
     report = build_audit_report(frame)
     print_audit(report)
+    if args.output:
+        print(f'Audit saved to {save_audit_report(report, args.output)}')
 
     modelling_table = create_modelling_table(frame)
     print(f"Model-ready columns after exclusions: {modelling_table.shape[1]}")
